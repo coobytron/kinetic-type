@@ -1,78 +1,37 @@
-# Deploying Kinetic Type to GitHub Pages
+# Deploying Kinetic Type
 
-## 1. Create a GitHub repo
+## GitHub Pages
 
-Suggested repo name:
+1. In the repo: **Settings → Pages → Source: GitHub Actions**.
+2. Push to `main`. The workflow in `.github/workflows/static.yml` installs, tests, builds and publishes `dist/`.
 
-```text
-kinetic-type
-```
+The site will be at `https://<user>.github.io/kinetic-type/`. The build uses relative paths, so it works from a project sub-path or an iframe.
 
-## 2. Push from Terminal
+## Embed in Squarespace (or any site)
 
-From inside this folder:
-
-```bash
-git init
-git add .
-git commit -m "Add Kinetic Type physics typography app"
-git branch -M main
-gh repo create kinetic-type --public --source=. --remote=origin --push
-```
-
-If the repo already exists:
-
-```bash
-git remote add origin https://github.com/YOUR_USERNAME/kinetic-type.git
-git push -u origin main
-```
-
-## 3. Enable GitHub Pages
-
-In GitHub:
-
-1. Open the repo
-2. Go to **Settings**
-3. Go to **Pages**
-4. Source: **Deploy from a branch**
-5. Branch: **main**
-6. Folder: **/ root**
-7. Save
-
-Your URL will look like:
-
-```text
-https://YOUR_USERNAME.github.io/kinetic-type/
-```
-
-## 4. Embed in Squarespace
-
-Use a Code Block with this iframe:
+Use a Code Block. The `allow` list matters: `accelerometer` and `gyroscope` let **Tilt** work inside the iframe on iPhone, `xr-spatial-tracking` covers AR, and `clipboard-write` lets **Copy link** work.
 
 ```html
-<div class="portfolio-tool-frame">
+<div class="kinetic-type-frame">
   <iframe
-    src="https://YOUR_USERNAME.github.io/kinetic-type/"
-    title="Kinetic Type"
+    src="https://<user>.github.io/kinetic-type/"
+    title="Kinetic Type — 3D physics typography"
     loading="eager"
-    allow="fullscreen"
+    allow="fullscreen; accelerometer; gyroscope; xr-spatial-tracking; clipboard-write; web-share"
   ></iframe>
 </div>
 
 <style>
-  .portfolio-tool-frame {
+  .kinetic-type-frame {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     margin-left: calc(50% - 50vw);
     overflow: hidden;
     background: #f6f4ef;
   }
-
-  .portfolio-tool-frame iframe {
-    width: 100%;
-    height: 100%;
-    border: 0;
-    display: block;
-  }
+  .kinetic-type-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
 </style>
 ```
+
+Deep links work in the `src` too: open the app, set up a composition, use **Copy link**, and paste that URL as the iframe `src` to embed that exact piece.

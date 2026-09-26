@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Kinetic Type — Physics Typography Lab</title>
+  <meta name="description" content="A browser-based kinetic typography tool for composing text with physics, gravity, wind, and export." />
+  <style>
+    :root {
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Helvetica, Arial, sans-serif;
+      --bg: #f6f4ef;
+      --ink: #111111;
+      --muted: #6e6a64;
+      --panel: rgba(255,255,255,.74);
+      --line: rgba(0,0,0,.12);
+      --accent: #ff4f1f;
+      --blue: #0a84ff;
+      --shadow: 0 18px 60px rgba(0,0,0,.12);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--font); color: var(--ink); }
+    #stage { position: fixed; inset: 0; cursor: grab; }
+    #stage:active { cursor: grabbing; }
+    canvas { display: block; }
+
+    .topbar {
+      position: fixed; left: 18px; top: 16px; z-index: 10;
+      display: flex; align-items: baseline; gap: 10px; pointer-events: none;
+      color: var(--ink); mix-blend-mode: multiply;
+    }
+    .topbar h1 { margin: 0; font-size: 15px; letter-spacing: .01em; font-weight: 680; }
+    .topbar span { color: var(--muted); font-size: 12px; }
+
+    #panel {
+      position: fixed; right: 14px; top: 14px; width: min(330px, calc(100vw - 28px)); max-height: calc(100vh - 28px);
+      overflow: auto; z-index: 20; padding: 16px; border: 1px solid var(--line); border-radius: 18px;
+      background: var(--panel); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+      box-shadow: var(--shadow);
+    }
+    #panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .16em; margin: 0 0 10px; color: var(--muted); }
+    .section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+    textarea {
+      width: 100%; min-height: 92px; resize: vertical; border-radius: 12px; border: 1px solid var(--line);
+      padding: 11px 12px; font: 500 14px/1.35 var(--font); color: var(--ink); background: rgba(255,255,255,.82); outline: none;
+    }
+    textarea:focus { border-color: rgba(10,132,255,.55); box-shadow: 0 0 0 3px rgba(10,132,255,.12); }
+    .row { margin: 12px 0; }
+    .row label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .row label b { color: var(--ink); font-variant-numeric: tabular-nums; font-size: 11px; }
+    input[type="range"] { width: 100%; accent-color: var(--ink); }
+    input[type="color"] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    .colorrow { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); margin: 11px 0; }
+    .btns { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+    button, .btn {
+      appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.74); color: var(--ink);
+      border-radius: 999px; padding: 8px 11px; font: 650 12px/1 var(--font); cursor: pointer; user-select: none;
+      transition: background .15s ease, transform .15s ease, border-color .15s ease;
+    }
+    button:hover, .btn:hover { background: white; transform: translateY(-1px); }
+    button.primary { color: white; background: var(--ink); border-color: var(--ink); }
+    button.accent { color: white; background: var(--accent); border-color: var(--accent); }
+    button.on { color: white; background: var(--blue); border-color: var(--blue); }
+    .toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; border-radius: 12px; background: rgba(0,0,0,.06); }
+    .toggle button { border-radius: 9px; border: none; background: transparent; color: var(--muted); }
+    .toggle button.on { background: var(--ink); color: white; }
+    .hint {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 12;
+      padding: 8px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.7);
+      backdrop-filter: blur(16px); color: var(--muted); font-size: 12px; text-align: center;
+    }
+    .mini { color: var(--muted); font-size: 11.5px; line-height: 1.35; margin: 8px 0 0; }
+    body.hide-ui #panel, body.hide-ui .hint, body.hide-ui .topbar { opacity: 0; pointer-events: none; }
+    @media (max-width: 760px) {
+      #panel { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto; max-height: 48vh; }
+      .topbar { top: 12px; left: 12px; }
+      .hint { display: none; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="topbar"><h1>Kinetic Type</h1><span>physics typography lab</span></div>
+
+  <aside id="panel" aria-label="Kinetic Type controls">
+    <div class="section">
+      <h2>Text</h2>
+      <textarea id="textInput">Hi, I’m an Art Director utilizing AI to create tooling.</textarea>
+      <div class="btns">
+        <button id="buildBtn" class="primary">Build Type</button>
+        <button id="explodeBtn">Explode</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+      <p class="mini">Drag type directly. Hold the mouse down on the canvas to use the fan force.</p>
+    </div>
+
+    <div class="section">
+      <h2>Mode</h2>
+      <div class="toggle" id="modeToggle">
+        <button data-mode="word" class="on">Words</button>
+        <button data-mode="letter">Letters</button>
+      </div>
+      <div class="btns">
+        <button id="pinBtn">Pin first words</button>
+        <button id="floorBtn" class="on">Floor on</button>
+        <button id="fanBtn" class="on">Fan on</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Physics</h2>
+      <div class="row"><label>Gravity <b id="vGravity">0.65</b></label><input id="gravity" type="range" min="-1.2" max="1.8" step="0.01" value="0.65"></div>
+      <div class="row"><label>Wind <b id="vWind">0.000</b></label><input id="wind" type="range" min="-0.004" max="0.004" step="0.0001" value="0"></div>
+      <div class="row"><label>Fan Strength <b id="vFan">0.034</b></label><input id="fanStrength" type="range" min="0" max="0.08" step="0.001" value="0.034"></div>
+      <div class="row"><label>Bounce <b id="vBounce">0.64</b></label><input id="bounce" type="range" min="0" max="1" step="0.01" value="0.64"></div>
+      <div class="row"><label>Friction <b id="vFriction">0.035</b></label><input id="friction" type="range" min="0" max="0.18" step="0.005" value="0.035"></div>
+    </div>
+
+    <div class="section">
+      <h2>Look</h2>
+      <div class="row"><label>Type Size <b id="vSize">82</b></label><input id="typeSize" type="range" min="28" max="160" step="1" value="82"></div>
+      <div class="row"><label>Tracking <b id="vTracking">0.00</b></label><input id="tracking" type="range" min="-0.08" max="0.28" step="0.01" value="0"></div>
+      <div class="colorrow"><span>Ink</span><input id="inkColor" type="color" value="#111111"></div>
+      <div class="colorrow"><span>Accent</span><input id="accentColor" type="color" value="#ff4f1f"></div>
+      <div class="colorrow"><span>Background</span><input id="bgColor" type="color" value="#f6f4ef"></div>
+      <div class="btns">
+        <button data-preset="poster">Poster</button>
+        <button data-preset="storm">Storm</button>
+        <button data-preset="zero">Zero-G</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <div class="btns">
+        <button id="pngBtn" class="accent">PNG</button>
+        <button id="svgBtn">SVG</button>
+        <button id="saveBtn">Save State</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="hint">Drag words · hold mouse to fan · press H to hide UI · Space to explode</div>
+
+  <script>
+    const { Engine, World, Bodies, Body, Composite, Constraint, Mouse, MouseConstraint, Query } = Matter;
+
+    let engine, world, canvas, mouseConstraint;
+    let tokens = [];
+    let boundaries = [];
+    let constraints = [];
+    let mode = 'word';
+    let floorOn = true;
+    let fanOn = true;
+    let pinOn = false;
+    let uiHover = false;
+
+    const state = {
+      gravity: 0.65,
+      wind: 0,
+      fanStrength: 0.034,
+      bounce: 0.64,
+      friction: 0.035,
+      typeSize: 82,
+      tracking: 0,
+      ink: '#111111',
+      accent: '#ff4f1f',
+      bg: '#f6f4ef'
+    };
+
+    const $ = id => document.getElementById(id);
+    const panel = $('panel');
+    panel.addEventListener('pointerenter', () => uiHover = true);
+    panel.addEventListener('pointerleave', () => uiHover = false);
+
+    class TypeToken {
+      constructor(label, x, y, groupIndex, tokenIndex, isAnchor = false) {
+        this.label = label;
+        this.groupIndex = groupIndex;
+        this.tokenIndex = tokenIndex;
+        this.isAnchor = isAnchor;
+        this.accent = Math.random() < 0.16;
+        this.size = state.typeSize * (mode === 'letter' ? 0.72 : 1);
+        const dims = measureLabel(label, this.size);
+        this.w = Math.max(18, dims.w + this.size * 0.34);
+        this.h = Math.max(18, dims.h * 1.08);
+        this.body = Bodies.rectangle(x, y, this.w, this.h, {
+          restitution: state.bounce,
+          friction: state.friction,
+          frictionAir: 0.015,
+          density: 0.0016,
+          chamfer: { radius: Math.min(14, this.h * .2) }
+        });
+        this.body.plugin = { token: this };
+        World.add(world, this.body);
+      }
+      syncPhysics() {
+        this.body.restitution = state.bounce;
+        this.body.friction = state.friction;
+      }
+      draw() {
+        const p = this.body.position;
+        push();
+        translate(p.x, p.y);
+        rotate(this.body.angle);
+        noStroke();
+        textAlign(CENTER, CENTER);
+        textFont('Helvetica, Arial, sans-serif');
+        textStyle(this.isAnchor && pinOn ? BOLD : NORMAL);
+        textSize(this.size);
+        const c = this.accent ? state.accent : state.ink;
+        fill(c);
+        drawingContext.shadowColor = c;
+        drawingContext.shadowBlur = this.accent ? 18 : 0;
+        const trackingPx = state.tracking * this.size;
+        drawTrackedText(this.label, 0, 0, trackingPx);
+        drawingContext.shadowBlur = 0;
+        if (this.isAnchor && pinOn) {
+          noFill(); stroke(state.accent); strokeWeight(1.2); rectMode(CENTER); rect(0, 0, this.w + 8, this.h + 6, 8);
+        }
+        pop();
+      }
+      remove() { World.remove(world, this.body); }
+    }
+
+    function setup() {
+      canvas = createCanvas(windowWidth, windowHeight);
+      canvas.parent('stage');
+      pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
+      engine = Engine.create();
+      world = engine.world;
+      world.gravity.y = state.gravity;
+      makeBoundaries();
+      const mouse = Mouse.create(canvas.elt);
+      mouse.pixelRatio = pixelDensity();
+      mouseConstraint = MouseConstraint.create(engine, {
+        mouse,
+        constraint: { stiffness: 0.18, damping: 0.06, render: { visible: false } }
+      });
+      World.add(world, mouseConstraint);
+      loadState();
+      buildType();
+      bindUI();
+    }
+
+    function draw() {
+      background(state.bg);
+      drawGrid();
+      world.gravity.y = state.gravity;
+      applyAmbientForces();
+      Engine.update(engine, 1000 / 60);
+      tokens.forEach(t => t.draw());
+      drawFanCursor();
+      drawStats();
+    }
+
+    function drawGrid() {
+      push();
+      stroke(0, 20); strokeWeight(1);
+      const gap = 48;
+      for (let x = width % gap; x < width; x += gap) line(x, 0, x, height);
+      for (let y = height % gap; y < height; y += gap) line(0, y, width, y);
+      pop();
+    }
+
+    function drawStats() {
+      push();
+      noStroke(); fill(0, 110); textSize(11); textAlign(LEFT, BOTTOM);
+      text(`${tokens.length} bodies · ${mode} mode`, 18, height - 18);
+      pop();
+    }
+
+    function drawFanCursor() {
+      if (!fanOn || uiHover) return;
+      push();
+      noFill(); stroke(state.accent + '66'); strokeWeight(1);
+      circle(mouseX, mouseY, 108);
+      if (mouseIsPressed) {
+        stroke(state.accent); circle(mouseX, mouseY, 148 + sin(frameCount * .25) * 10);
+      }
+      pop();
+    }
+
+    function applyAmbientForces() {
+      for (const t of tokens) {
+        if (state.wind !== 0) Body.applyForce(t.body, t.body.position, { x: state.wind * t.body.mass, y: 0 });
+      }
+      if (fanOn && mouseIsPressed && !uiHover) {
+        const origin = { x: mouseX, y: mouseY };
+        for (const t of tokens) {
+          const p = t.body.position;
+          const dx = p.x - origin.x, dy = p.y - origin.y;
+          const d = Math.max(36, Math.sqrt(dx * dx + dy * dy));
+          if (d < 420) {
+            const force = state.fanStrength * (1 - d / 420) * t.body.mass;
+            Body.applyForce(t.body, p, { x: (dx / d) * force, y: (dy / d) * force });
+          }
+        }
+      }
+    }
+
+    function makeBoundaries() {
+      boundaries.forEach(b => World.remove(world, b));
+      boundaries = [];
+      const t = 80;
+      const floor = Bodies.rectangle(width / 2, height + t / 2 - 16, width + t * 2, t, { isStatic: true });
+      const left = Bodies.rectangle(-t / 2, height / 2, t, height * 2, { isStatic: true });
+      const right = Bodies.rectangle(width + t / 2, height / 2, t, height * 2, { isStatic: true });
+      const ceil = Bodies.rectangle(width / 2, -t / 2, width + t * 2, t, { isStatic: true });
+      boundaries = floorOn ? [floor, left, right, ceil] : [left, right, ceil];
+      World.add(world, boundaries);
+    }
+
+    function tokenize(text) {
+      if (mode === 'letter') {
+        const out = [];
+        let word = 0, index = 0;
+        text.split(/(\s+)/).forEach(part => {
+          if (/^\s+$/.test(part)) { word++; index = 0; return; }
+          [...part].forEach((ch, i) => out.push({ label: ch, word, index: index++, isAnchor: i === 0 }));
+          word++; index = 0;
+        });
+        return out.filter(t => t.label.trim());
+      }
+      return text.trim().split(/\s+/).filter(Boolean).map((label, i) => ({ label, word: i, index: 0, isAnchor: true }));
+    }
+
+    function buildType(layout = 'poster') {
+      clearTokens();
+      textSize(state.typeSize);
+      const pieces = tokenize($('textInput').value);
+      let x = Math.max(90, width * .08);
+      let y = Math.max(120, height * .24);
+      const maxW = width - Math.min(420, width * .35);
+      const gap = state.typeSize * (mode === 'letter' ? .62 : .26);
+      const lineH = state.typeSize * (mode === 'letter' ? 1.0 : 1.28);
+      pieces.forEach((piece, i) => {
+        const dims = measureLabel(piece.label, state.typeSize * (mode === 'letter' ? .72 : 1));
+        const w = Math.max(18, dims.w + state.typeSize * 0.34);
+        if (x + w > maxW && x > 110) { x = Math.max(90, width * .08); y += lineH; }
+        const jitter = layout === 'poster' ? 0 : random(-80, 80);
+        const token = new TypeToken(piece.label, x + w / 2 + jitter, y + random(-12, 12), piece.word, i, piece.isAnchor);
+        tokens.push(token);
+        x += w + gap;
+      });
+      if (pinOn) applyPins();
+      saveState();
+    }
+
+    function clearTokens() {
+      constraints.forEach(c => World.remove(world, c)); constraints = [];
+      tokens.forEach(t => t.remove()); tokens = [];
+    }
+
+    function measureLabel(label, size) {
+      push(); textFont('Helvetica, Arial, sans-serif'); textSize(size);
+      const w = textWidth(label) + Math.max(0, label.length - 1) * state.tracking * size;
+      pop();
+      return { w, h: size };
+    }
+
+    function drawTrackedText(str, x, y, tracking) {
+      if (!tracking) { text(str, x, y); return; }
+      let total = 0;
+      for (const ch of str) total += textWidth(ch) + tracking;
+      total -= tracking;
+      let cx = x - total / 2;
+      for (const ch of str) {
+        const w = textWidth(ch);
+        text(ch, cx + w / 2, y);
+        cx += w + tracking;
+      }
+    }
+
+    function explode() {
+      const cx = width / 2, cy = height / 2;
+      tokens.forEach(t => {
+        const p = t.body.position;
+        const dx = p.x - cx, dy = p.y - cy;
+        const d = Math.max(40, Math.sqrt(dx*dx + dy*dy));
+        Body.applyForce(t.body, p, { x: dx / d * 0.09 * t.body.mass, y: dy / d * 0.09 * t.body.mass - 0.02 * t.body.mass });
+        Body.setAngularVelocity(t.body, random(-0.22, 0.22));
+      });
+    }
+
+    function applyPins() {
+      constraints.forEach(c => World.remove(world, c)); constraints = [];
+      const anchors = tokens.filter(t => t.isAnchor);
+      anchors.forEach((t, i) => {
+        const c = Constraint.create({
+          pointA: { x: t.body.position.x, y: Math.max(80, t.body.position.y - 40) },
+          bodyB: t.body,
+          stiffness: 0.055,
+          damping: 0.08,
+          length: 14
+        });
+        constraints.push(c);
+      });
+      World.add(world, constraints);
+    }
+
+    function removePins() { constraints.forEach(c => World.remove(world, c)); constraints = []; }
+
+    function setPreset(name) {
+      if (name === 'poster') {
+        Object.assign(state, { gravity: .65, wind: 0, fanStrength: .034, bounce: .64, friction: .035, typeSize: 82, tracking: 0, bg: '#f6f4ef', ink: '#111111', accent: '#ff4f1f' });
+        floorOn = true; fanOn = true;
+      } else if (name === 'storm') {
+        Object.assign(state, { gravity: .2, wind: .0026, fanStrength: .065, bounce: .88, friction: .015, typeSize: 74, tracking: .04, bg: '#0f1117', ink: '#f6f4ef', accent: '#0a84ff' });
+        floorOn = true; fanOn = true;
+      } else if (name === 'zero') {
+        Object.assign(state, { gravity: 0, wind: .0004, fanStrength: .025, bounce: .95, friction: .005, typeSize: 72, tracking: .12, bg: '#ffffff', ink: '#121212', accent: '#ff2d55' });
+        floorOn = false; fanOn = true;
+      }
+      syncUI(); makeBoundaries(); buildType(name); saveState();
+    }
+
+    function bindUI() {
+      $('buildBtn').onclick = () => buildType();
+      $('explodeBtn').onclick = explode;
+      $('resetBtn').onclick = () => buildType();
+      $('pinBtn').onclick = () => { pinOn = !pinOn; $('pinBtn').classList.toggle('on', pinOn); pinOn ? applyPins() : removePins(); saveState(); };
+      $('floorBtn').onclick = () => { floorOn = !floorOn; $('floorBtn').classList.toggle('on', floorOn); makeBoundaries(); saveState(); };
+      $('fanBtn').onclick = () => { fanOn = !fanOn; $('fanBtn').classList.toggle('on', fanOn); saveState(); };
+      $('modeToggle').addEventListener('click', e => {
+        const b = e.target.closest('[data-mode]'); if (!b) return;
+        mode = b.dataset.mode;
+        document.querySelectorAll('#modeToggle button').forEach(x => x.classList.toggle('on', x === b));
+        buildType(); saveState();
+      });
+      const sliders = ['gravity','wind','fanStrength','bounce','friction','typeSize','tracking'];
+      sliders.forEach(id => $(id).addEventListener('input', () => {
+        state[id] = parseFloat($(id).value); syncReadouts(); tokens.forEach(t => t.syncPhysics());
+        if (id === 'typeSize' || id === 'tracking') buildType(); saveState();
+      }));
+      $('inkColor').oninput = () => { state.ink = $('inkColor').value; saveState(); };
+      $('accentColor').oninput = () => { state.accent = $('accentColor').value; document.documentElement.style.setProperty('--accent', state.accent); saveState(); };
+      $('bgColor').oninput = () => { state.bg = $('bgColor').value; saveState(); };
+      document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => setPreset(b.dataset.preset));
+      $('pngBtn').onclick = () => saveCanvas(canvas, 'kinetic-type-' + Date.now(), 'png');
+      $('svgBtn').onclick = exportSVG;
+      $('saveBtn').onclick = saveState;
+      window.addEventListener('keydown', e => {
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+        if (e.key === ' ') { e.preventDefault(); explode(); }
+        if (e.key.toLowerCase() === 'h') document.body.classList.toggle('hide-ui');
+      });
+      syncUI();
+    }
+
+    function syncUI() {
+      $('gravity').value = state.gravity; $('wind').value = state.wind; $('fanStrength').value = state.fanStrength;
+      $('bounce').value = state.bounce; $('friction').value = state.friction; $('typeSize').value = state.typeSize; $('tracking').value = state.tracking;
+      $('inkColor').value = state.ink; $('accentColor').value = state.accent; $('bgColor').value = state.bg;
+      $('floorBtn').classList.toggle('on', floorOn); $('fanBtn').classList.toggle('on', fanOn); $('pinBtn').classList.toggle('on', pinOn);
+      document.documentElement.style.setProperty('--accent', state.accent);
+      syncReadouts();
+    }
+
+    function syncReadouts() {
+      $('vGravity').textContent = Number(state.gravity).toFixed(2);
+      $('vWind').textContent = Number(state.wind).toFixed(4);
+      $('vFan').textContent = Number(state.fanStrength).toFixed(3);
+      $('vBounce').textContent = Number(state.bounce).toFixed(2);
+      $('vFriction').textContent = Number(state.friction).toFixed(3);
+      $('vSize').textContent = Math.round(state.typeSize);
+      $('vTracking').textContent = Number(state.tracking).toFixed(2);
+    }
+
+    function saveState() {
+      const data = { state, mode, floorOn, fanOn, pinOn, text: $('textInput').value };
+      try { localStorage.setItem('kinetic-type.v1', JSON.stringify(data)); } catch(e) {}
+    }
+
+    function loadState() {
+      try {
+        const data = JSON.parse(localStorage.getItem('kinetic-type.v1'));
+        if (!data) return;
+        Object.assign(state, data.state || {});
+        mode = data.mode || mode; floorOn = data.floorOn ?? floorOn; fanOn = data.fanOn ?? fanOn; pinOn = data.pinOn ?? pinOn;
+        if (data.text) $('textInput').value = data.text;
+        document.querySelectorAll('#modeToggle button').forEach(x => x.classList.toggle('on', x.dataset.mode === mode));
+        makeBoundaries();
+      } catch(e) {}
+    }
+
+    function exportSVG() {
+      const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+      const items = tokens.map(t => {
+        const p = t.body.position;
+        const fill = t.accent ? state.accent : state.ink;
+        return `<text x="${p.x.toFixed(2)}" y="${p.y.toFixed(2)}" transform="rotate(${(t.body.angle * 180 / Math.PI).toFixed(2)} ${p.x.toFixed(2)} ${p.y.toFixed(2)})" text-anchor="middle" dominant-baseline="middle" font-family="Helvetica, Arial, sans-serif" font-size="${t.size.toFixed(2)}" font-weight="${t.isAnchor && pinOn ? 700 : 500}" fill="${fill}">${esc(t.label)}</text>`;
+      }).join('\n  ');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n  <rect width="100%" height="100%" fill="${state.bg}"/>\n  ${items}\n</svg>`;
+      const blob = new Blob([svg], { type: 'image/svg+xml' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'kinetic-type-' + Date.now() + '.svg';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      makeBoundaries();
+    }
+  </script>
+</body>
+</html>
